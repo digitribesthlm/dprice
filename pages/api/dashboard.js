@@ -10,21 +10,28 @@ export default async function handler(req, res) {
     const competitorPrices = db.collection(COLLECTIONS.COMPETITOR_PRICES)
     const ownProducts = db.collection(COLLECTIONS.OWN_PRODUCTS)
 
+    // Filter for valid products only
+    const validProductFilter = {
+      name: { $exists: true, $ne: null, $ne: '' },
+      price: { $exists: true, $ne: null, $gt: 0 }
+    }
+
     // Get date for one week ago
     const oneWeekAgo = new Date()
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
 
-    // Get total counts
+    // Get total counts (only valid products)
     const [totalCompetitorRecords, totalOwnProducts] = await Promise.all([
-      competitorPrices.countDocuments(),
+      competitorPrices.countDocuments(validProductFilter),
       ownProducts.countDocuments()
     ])
 
-    // Get unique domains (sources)
-    const uniqueDomains = await competitorPrices.distinct('domain')
+    // Get unique domains (sources) from valid products
+    const uniqueDomains = await competitorPrices.distinct('domain', validProductFilter)
 
-    // Get this week's price changes (products with price diff)
+    // Get this week's price changes (products with price diff) - only valid products
     const weeklyChanges = await competitorPrices.find({
+      ...validProductFilter,
       $or: [
         { imported_at: { $gte: oneWeekAgo } },
         { date: { $gte: oneWeekAgo } }
@@ -41,19 +48,23 @@ export default async function handler(req, res) {
     const priceDrops = priceChanges.filter(item => parseFloat(item['price diff last crawl']) < 0)
     const priceIncreases = priceChanges.filter(item => parseFloat(item['price diff last crawl']) > 0)
 
-    // Get products with discounts (potential alerts)
+    // Get products with discounts (potential alerts) - only valid products
     const discountedProducts = await competitorPrices.find({
+      ...validProductFilter,
       has_discount: true
     }).sort({ imported_at: -1 }).limit(20).toArray()
 
-    // Get categories
-    const categories = await competitorPrices.distinct('category')
+    // Get categories (only from valid products)
+    const categories = await competitorPrices.distinct('category', validProductFilter)
+    const validCategories = categories.filter(cat => cat && cat.trim() !== '')
 
-    // Get unique product names for selector
-    const productNames = await competitorPrices.distinct('name')
+    // Get unique product names for selector (only valid products)
+    const productNames = await competitorPrices.distinct('name', validProductFilter)
+    const validProductNames = productNames.filter(name => name && name.trim() !== '')
 
-    // Calculate stats
+    // Calculate stats (only from valid products)
     const priceStats = await competitorPrices.aggregate([
+      { $match: validProductFilter },
       {
         $group: {
           _id: null,
@@ -84,8 +95,8 @@ export default async function handler(req, res) {
       stats: {
         totalCompetitorRecords,
         totalOwnProducts,
-        totalSources: uniqueDomains.length,
-        totalCategories: categories.length,
+        totalSources: uniqueDomains.filter(d => d).length,
+        totalCategories: validCategories.length,
         productsWithDiscount: priceStats[0]?.totalWithDiscount || 0,
         avgPrice: priceStats[0]?.avgPrice?.toFixed(2) || '0',
       },
@@ -93,9 +104,9 @@ export default async function handler(req, res) {
       priceDrops,
       priceIncreases,
       discountedProducts,
-      categories,
-      productNames: productNames.filter(n => n).slice(0, 200), // Filter nulls, limit to 200
-      sources: uniqueDomains
+      categories: validCategories,
+      productNames: validProductNames.slice(0, 200),
+      sources: uniqueDomains.filter(d => d)
     })
   } catch (error) {
     console.error('Dashboard API error:', error)

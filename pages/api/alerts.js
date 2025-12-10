@@ -10,11 +10,18 @@ export default async function handler(req, res) {
     const competitorPrices = db.collection(COLLECTIONS.COMPETITOR_PRICES)
     const ownProducts = db.collection(COLLECTIONS.OWN_PRODUCTS)
 
+    // Filter for valid products only
+    const validProductFilter = {
+      name: { $exists: true, $ne: null, $ne: '' },
+      price: { $exists: true, $ne: null, $gt: 0 }
+    }
+
     // Get all own products
     const ownProductsList = await ownProducts.find({}).toArray()
 
-    // Get competitor products with discounts or recent price drops
+    // Get competitor products with discounts or recent price drops - only valid products
     const competitorAlerts = await competitorPrices.find({
+      ...validProductFilter,
       $or: [
         { has_discount: true },
         { 'price diff last crawl': { $lt: 0 } },
@@ -72,4 +79,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ message: 'Internal server error', error: error.message })
   }
 }
-

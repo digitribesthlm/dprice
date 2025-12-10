@@ -19,15 +19,30 @@ export default async function handler(req, res) {
       sortOrder = 'desc'
     } = req.query
 
-    // Build filter
-    const filter = {}
+    // Build filter - exclude products with no useful data
+    const filter = {
+      // Must have a name (not null, not empty)
+      name: { $exists: true, $ne: null, $ne: '' },
+      // Must have a valid price
+      price: { $exists: true, $ne: null, $gt: 0 }
+    }
+
     if (category) filter.category = category
     if (hasDiscount === 'true') filter.has_discount = true
     if (search) {
-      filter.$or = [
-        { name: { $regex: search, $options: 'i' } },
-        { url: { $regex: search, $options: 'i' } }
+      filter.$and = [
+        { name: { $exists: true, $ne: null, $ne: '' } },
+        { price: { $exists: true, $ne: null, $gt: 0 } },
+        {
+          $or: [
+            { name: { $regex: search, $options: 'i' } },
+            { url: { $regex: search, $options: 'i' } }
+          ]
+        }
       ]
+      // Remove the duplicate conditions since they're in $and now
+      delete filter.name
+      delete filter.price
     }
 
     // Build sort
@@ -44,8 +59,14 @@ export default async function handler(req, res) {
       .limit(parseInt(limit))
       .toArray()
 
-    // Get categories for filter
-    const categories = await collection.distinct('category')
+    // Get categories for filter (only from valid products)
+    const categories = await collection.distinct('category', {
+      name: { $exists: true, $ne: null, $ne: '' },
+      price: { $exists: true, $ne: null, $gt: 0 }
+    })
+
+    // Filter out null/empty categories
+    const validCategories = categories.filter(cat => cat && cat.trim() !== '')
 
     return res.status(200).json({
       prices,
@@ -55,11 +76,10 @@ export default async function handler(req, res) {
         total,
         totalPages: Math.ceil(total / parseInt(limit))
       },
-      categories
+      categories: validCategories
     })
   } catch (error) {
     console.error('Prices API error:', error)
     return res.status(500).json({ message: 'Internal server error', error: error.message })
   }
 }
-
