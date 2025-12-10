@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card'
 
-export default function PricesPage() {
+function PricesContent() {
   const searchParams = useSearchParams()
   const [prices, setPrices] = useState([])
   const [categories, setCategories] = useState([])
@@ -257,3 +257,18 @@ export default function PricesPage() {
   )
 }
 
+function LoadingFallback() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+    </div>
+  )
+}
+
+export default function PricesPage() {
+  return (
+    <Suspense fallback={<LoadingFallback />}>
+      <PricesContent />
+    </Suspense>
+  )
+}
