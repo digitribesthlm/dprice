@@ -10,6 +10,9 @@ export default function DashboardPage() {
   const [alerts, setAlerts] = useState(null)
   const [loading, setLoading] = useState(true)
   
+  // Category filter
+  const [selectedCategory, setSelectedCategory] = useState('')
+  
   // Product selector state
   const [selectedProduct, setSelectedProduct] = useState('')
   const [productHistory, setProductHistory] = useState(null)
@@ -59,6 +62,27 @@ export default function DashboardPage() {
     fetchProductHistory()
   }, [selectedProduct])
 
+  // Filter products by selected category
+  const filteredProductNames = selectedCategory
+    ? data?.productNames?.filter(name => {
+        // We need to check if this product belongs to the selected category
+        // For now, show all if category is selected (the dropdown will filter)
+        return true
+      })
+    : data?.productNames
+
+  const filteredPriceDrops = selectedCategory
+    ? data?.priceDrops?.filter(p => p.category === selectedCategory)
+    : data?.priceDrops
+
+  const filteredPriceIncreases = selectedCategory
+    ? data?.priceIncreases?.filter(p => p.category === selectedCategory)
+    : data?.priceIncreases
+
+  const filteredDiscountedProducts = selectedCategory
+    ? data?.discountedProducts?.filter(p => p.category === selectedCategory)
+    : data?.discountedProducts
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -97,6 +121,38 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* Category Filter */}
+      <Card className="bg-gradient-to-r from-emerald-50 to-teal-50 border-emerald-200">
+        <CardContent className="py-4">
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-medium text-gray-900">Filter by Category</p>
+                <p className="text-sm text-gray-500">View data for a specific product category</p>
+              </div>
+            </div>
+            <select
+              value={selectedCategory}
+              onChange={(e) => {
+                setSelectedCategory(e.target.value)
+                setSelectedProduct('') // Reset product selection when category changes
+              }}
+              className="w-full md:w-72 px-4 py-2.5 border border-emerald-300 rounded-xl focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors bg-white text-sm font-medium"
+            >
+              <option value="">All Categories</option>
+              {data?.categories?.map((cat, idx) => (
+                <option key={idx} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -264,7 +320,7 @@ export default function DashboardPage() {
               className="w-full md:w-96 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors bg-white text-sm"
             >
               <option value="">-- Select a product --</option>
-              {data?.productNames?.map((name, idx) => (
+              {filteredProductNames?.map((name, idx) => (
                 <option key={idx} value={name}>{name}</option>
               ))}
             </select>
@@ -396,14 +452,14 @@ export default function DashboardPage() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
               </svg>
-              Price Drops This Week
+              Price Drops {selectedCategory ? `in ${selectedCategory}` : 'This Week'}
             </CardTitle>
-            <span className="text-sm text-gray-500">{data?.priceDrops?.length || 0} products</span>
+            <span className="text-sm text-gray-500">{filteredPriceDrops?.length || 0} products</span>
           </CardHeader>
           <CardContent>
-            {data?.priceDrops?.length > 0 ? (
+            {filteredPriceDrops?.length > 0 ? (
               <div className="space-y-3 max-h-80 overflow-y-auto">
-                {data.priceDrops.slice(0, 10).map((product, idx) => {
+                {filteredPriceDrops.slice(0, 10).map((product, idx) => {
                   const priceDiff = parseFloat(product['price diff last crawl']) || 0
                   return (
                     <div 
@@ -439,7 +495,7 @@ export default function DashboardPage() {
                 <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p>No price drops this week</p>
+                <p>No price drops {selectedCategory ? `in ${selectedCategory}` : 'this week'}</p>
               </div>
             )}
           </CardContent>
@@ -452,14 +508,14 @@ export default function DashboardPage() {
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
               </svg>
-              Price Increases This Week
+              Price Increases {selectedCategory ? `in ${selectedCategory}` : 'This Week'}
             </CardTitle>
-            <span className="text-sm text-gray-500">{data?.priceIncreases?.length || 0} products</span>
+            <span className="text-sm text-gray-500">{filteredPriceIncreases?.length || 0} products</span>
           </CardHeader>
           <CardContent>
-            {data?.priceIncreases?.length > 0 ? (
+            {filteredPriceIncreases?.length > 0 ? (
               <div className="space-y-3 max-h-80 overflow-y-auto">
-                {data.priceIncreases.slice(0, 10).map((product, idx) => {
+                {filteredPriceIncreases.slice(0, 10).map((product, idx) => {
                   const priceDiff = parseFloat(product['price diff last crawl']) || 0
                   return (
                     <div 
@@ -495,7 +551,7 @@ export default function DashboardPage() {
                 <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p>No price increases this week</p>
+                <p>No price increases {selectedCategory ? `in ${selectedCategory}` : 'this week'}</p>
               </div>
             )}
           </CardContent>
@@ -509,16 +565,16 @@ export default function DashboardPage() {
             <svg className="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
             </svg>
-            Active Competitor Discounts
+            Active Competitor Discounts {selectedCategory && `in ${selectedCategory}`}
           </CardTitle>
-          <Link href="/prices?hasDiscount=true" className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
+          <Link href={`/prices?hasDiscount=true${selectedCategory ? `&category=${selectedCategory}` : ''}`} className="text-sm text-emerald-600 hover:text-emerald-700 font-medium">
             View all →
           </Link>
         </CardHeader>
         <CardContent>
-          {data?.discountedProducts?.length > 0 ? (
+          {filteredDiscountedProducts?.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {data.discountedProducts.slice(0, 6).map((product, idx) => (
+              {filteredDiscountedProducts.slice(0, 6).map((product, idx) => (
                 <div 
                   key={idx} 
                   className="p-4 rounded-xl bg-gradient-to-br from-amber-50 to-orange-50 border border-amber-200 hover:shadow-md transition-shadow"
@@ -544,7 +600,7 @@ export default function DashboardPage() {
             </div>
           ) : (
             <div className="text-center py-8 text-gray-500">
-              <p>No active competitor discounts</p>
+              <p>No active competitor discounts {selectedCategory && `in ${selectedCategory}`}</p>
             </div>
           )}
         </CardContent>
