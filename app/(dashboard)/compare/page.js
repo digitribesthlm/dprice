@@ -2,7 +2,18 @@
 
 import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '../../../components/ui/Card'
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts'
+
+// Extract domain from URL
+function getDomain(url) {
+  if (!url) return 'Unknown'
+  try {
+    const urlObj = new URL(url)
+    return urlObj.hostname.replace('www.', '')
+  } catch {
+    return url.split('/')[2]?.replace('www.', '') || url
+  }
+}
 
 export default function ComparePage() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -15,13 +26,6 @@ export default function ComparePage() {
     'SE': '🇸🇪', 'ES': '🇪🇸', 'DE': '🇩🇪', 'FR': '🇫🇷', 'IT': '🇮🇹',
     'UK': '🇬🇧', 'US': '🇺🇸', 'NL': '🇳🇱', 'BE': '🇧🇪', 'DK': '🇩🇰',
     'NO': '🇳🇴', 'FI': '🇫🇮', 'PL': '🇵🇱', 'PT': '🇵🇹', 'AT': '🇦🇹'
-  }
-
-  // Country colors for charts
-  const countryColors = {
-    'SE': '#0052CC', 'ES': '#AA151B', 'DE': '#000000', 'FR': '#002654', 'IT': '#009246',
-    'UK': '#012169', 'US': '#3C3B6E', 'NL': '#21468B', 'BE': '#000000', 'DK': '#C8102E',
-    'NO': '#BA0C2F', 'FI': '#003580', 'PL': '#DC143C', 'PT': '#006600', 'AT': '#ED2939'
   }
 
   const handleSearch = async (term) => {
@@ -324,6 +328,7 @@ export default function ComparePage() {
                       rel="noopener noreferrer"
                       className="p-4 border border-gray-200 rounded-xl hover:border-indigo-300 hover:shadow-md transition-all"
                     >
+                      <p className="text-xs text-indigo-600 font-medium mb-1">{getDomain(product.url)}</p>
                       <p className="font-medium text-gray-900 truncate mb-1">{product.name}</p>
                       <p className="text-sm text-gray-500 truncate mb-2">{product.category}</p>
                       <div className="flex items-center justify-between">
