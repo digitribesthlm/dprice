@@ -19,9 +19,9 @@ export default async function handler(req, res) {
       price: { $exists: true, $ne: null, $gt: 0 }
     }
 
-    // Add category filter if provided
+    // Add category filter if provided (case-insensitive)
     if (category) {
-      validProductFilter.category = category
+      validProductFilter.category = { $regex: new RegExp(`^${category}$`, 'i') }
     }
 
     // Get date for one week ago
@@ -72,8 +72,19 @@ export default async function handler(req, res) {
       .sort((a, b) => new Date(b.imported_at) - new Date(a.imported_at))
       .slice(0, 20)
 
-    // Get categories
-    const categories = [...new Set(filteredCompetitors.map(p => p.category).filter(c => c && c.trim() !== ''))]
+    // Get categories (normalized to handle case differences)
+    const categoryMap = new Map()
+    filteredCompetitors.forEach(p => {
+      if (p.category && p.category.trim()) {
+        const normalized = p.category.trim().toLowerCase()
+        // Keep the first occurrence's original casing but capitalize first letter
+        if (!categoryMap.has(normalized)) {
+          const formatted = p.category.trim().charAt(0).toUpperCase() + p.category.trim().slice(1).toLowerCase()
+          categoryMap.set(normalized, formatted)
+        }
+      }
+    })
+    const categories = [...categoryMap.values()].sort()
 
     // Get unique product names for selector
     const productNames = [...new Set(filteredCompetitors.map(p => p.name).filter(n => n && n.trim() !== ''))]
