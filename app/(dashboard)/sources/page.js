@@ -9,6 +9,17 @@ export default function SourcesPage() {
   const [showAddForm, setShowAddForm] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [message, setMessage] = useState(null)
+  const [copiedId, setCopiedId] = useState(null)
+
+  const copyToClipboard = async (text, id) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedId(id)
+      setTimeout(() => setCopiedId(null), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
   
   const [newSource, setNewSource] = useState({
     url: '',
@@ -306,17 +317,21 @@ export default function SourcesPage() {
                         <p className="text-2xl font-bold text-emerald-600">{source.avgPrice}</p>
                         <p className="text-xs text-gray-500">avg SEK</p>
                       </div>
-                      <a
-                        href={source._id}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                      <button
+                        onClick={() => copyToClipboard(source._id, `source-${idx}`)}
                         className="p-3 bg-gray-100 hover:bg-emerald-100 rounded-xl transition-colors group"
-                        title="Visit Site"
+                        title="Copy Link"
                       >
-                        <svg className="w-5 h-5 text-gray-500 group-hover:text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                        </svg>
-                      </a>
+                        {copiedId === `source-${idx}` ? (
+                          <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <svg className="w-5 h-5 text-gray-500 group-hover:text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                          </svg>
+                        )}
+                      </button>
                     </div>
                   </div>
 
@@ -326,16 +341,23 @@ export default function SourcesPage() {
                       <p className="text-xs text-gray-500 mb-2">Sample products:</p>
                       <div className="flex flex-wrap gap-2">
                         {source.sampleProducts.slice(0, 3).map((product, pIdx) => (
-                          <a
+                          <button
                             key={pIdx}
-                            href={product.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            onClick={() => copyToClipboard(product.url, `product-${idx}-${pIdx}`)}
                             className="inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-sm hover:border-emerald-300 hover:bg-emerald-50 transition-colors"
                           >
                             <span className="truncate max-w-[200px]">{product.name}</span>
                             <span className="text-emerald-600 font-medium">{product.price?.toFixed(2)} SEK</span>
-                          </a>
+                            {copiedId === `product-${idx}-${pIdx}` ? (
+                              <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                            ) : (
+                              <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                              </svg>
+                            )}
+                          </button>
                         ))}
                       </div>
                     </div>

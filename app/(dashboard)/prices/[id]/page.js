@@ -10,6 +10,17 @@ export default function PriceDetailPage({ params }) {
   const [product, setProduct] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
+
+  const copyToClipboard = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Failed to copy:', err)
+    }
+  }
 
   useEffect(() => {
     const fetchData = async () => {
@@ -96,17 +107,26 @@ export default function PriceDetailPage({ params }) {
               </div>
               <h1 className="text-2xl lg:text-3xl font-bold mb-2">{product.name || 'Unknown Product'}</h1>
               <p className="text-white/80">{product.category}</p>
-              <a 
-                href={product.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="text-white/90 hover:text-white text-sm inline-flex items-center gap-1 mt-3 underline underline-offset-4"
+              <button 
+                onClick={() => copyToClipboard(product.url)}
+                className="text-white/90 hover:text-white text-sm inline-flex items-center gap-1 mt-3 bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors"
               >
-                View on competitor site
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                </svg>
-              </a>
+                {copied ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    Copy Link
+                  </>
+                )}
+              </button>
             </div>
             <div className="flex-shrink-0 text-right">
               <p className="text-white/70 text-sm mb-1">Current Price</p>
