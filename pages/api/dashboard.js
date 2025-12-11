@@ -10,10 +10,22 @@ export default async function handler(req, res) {
     const competitorPrices = db.collection(COLLECTIONS.COMPETITOR_PRICES)
     const ownProducts = db.collection(COLLECTIONS.OWN_PRODUCTS)
 
+    const { country, category } = req.query
+
     // Filter for valid products only
     const validProductFilter = {
       name: { $exists: true, $ne: null, $ne: '' },
       price: { $exists: true, $ne: null, $gt: 0 }
+    }
+
+    // Add country filter if provided
+    if (country) {
+      validProductFilter.country = country
+    }
+
+    // Add category filter if provided
+    if (category) {
+      validProductFilter.category = category
     }
 
     // Get date for one week ago
@@ -23,8 +35,15 @@ export default async function handler(req, res) {
     // Get total counts (only valid products)
     const [totalCompetitorRecords, totalOwnProducts] = await Promise.all([
       competitorPrices.countDocuments(validProductFilter),
-      ownProducts.countDocuments()
+      ownProducts.countDocuments(country ? { country } : {})
     ])
+
+    // Get unique countries
+    const countries = await competitorPrices.distinct('country', {
+      name: { $exists: true, $ne: null, $ne: '' },
+      price: { $exists: true, $ne: null, $gt: 0 }
+    })
+    const validCountries = countries.filter(c => c && c.trim() !== '')
 
     // Get unique domains (sources) from valid products
     const uniqueDomains = await competitorPrices.distinct('domain', validProductFilter)
@@ -54,8 +73,14 @@ export default async function handler(req, res) {
       has_discount: true
     }).sort({ imported_at: -1 }).limit(20).toArray()
 
-    // Get categories (only from valid products)
-    const categories = await competitorPrices.distinct('category', validProductFilter)
+    // Get categories (only from valid products, optionally filtered by country)
+    const categoryFilter = {
+      name: { $exists: true, $ne: null, $ne: '' },
+      price: { $exists: true, $ne: null, $gt: 0 }
+    }
+    if (country) categoryFilter.country = country
+    
+    const categories = await competitorPrices.distinct('category', categoryFilter)
     const validCategories = categories.filter(cat => cat && cat.trim() !== '')
 
     // Get unique product names for selector (only valid products)
@@ -91,6 +116,26 @@ export default async function handler(req, res) {
         : 0
     }
 
+    // Get country stats for overview
+    const countryStats = await competitorPrices.aggregate([
+      { 
+        $match: {
+          name: { $exists: true, $ne: null, $ne: '' },
+          price: { $exists: true, $ne: null, $gt: 0 },
+          country: { $exists: true, $ne: null, $ne: '' }
+        }
+      },
+      {
+        $group: {
+          _id: '$country',
+          productCount: { $sum: 1 },
+          avgPrice: { $avg: '$price' },
+          discountCount: { $sum: { $cond: ['$has_discount', 1, 0] } }
+        }
+      },
+      { $sort: { productCount: -1 } }
+    ]).toArray()
+
     return res.status(200).json({
       stats: {
         totalCompetitorRecords,
@@ -105,6 +150,8 @@ export default async function handler(req, res) {
       priceIncreases,
       discountedProducts,
       categories: validCategories,
+      countries: validCountries,
+      countryStats,
       productNames: validProductNames.slice(0, 200),
       sources: uniqueDomains.filter(d => d)
     })
