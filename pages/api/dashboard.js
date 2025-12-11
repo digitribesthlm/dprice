@@ -121,11 +121,14 @@ export default async function handler(req, res) {
       const c = p.derivedCountry
       if (c) {
         if (!countryGroups[c]) {
-          countryGroups[c] = { products: [], prices: [], discounts: 0 }
+          countryGroups[c] = { products: [], prices: [], discountUrls: new Set() }
         }
         countryGroups[c].products.push(p)
         if (p.price) countryGroups[c].prices.push(p.price)
-        if (p.has_discount) countryGroups[c].discounts++
+        // Track unique discounts by URL
+        if (p.has_discount && p.url) {
+          countryGroups[c].discountUrls.add(p.url)
+        }
       }
     })
 
@@ -135,7 +138,7 @@ export default async function handler(req, res) {
       avgPrice: countryGroups[c].prices.length > 0 
         ? countryGroups[c].prices.reduce((a, b) => a + b, 0) / countryGroups[c].prices.length
         : 0,
-      discountCount: countryGroups[c].discounts
+      discountCount: countryGroups[c].discountUrls.size // Unique discounts
     })).sort((a, b) => b.productCount - a.productCount)
 
     // Combine countries from own products and derived from competitor URLs
