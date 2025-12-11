@@ -14,6 +14,9 @@ export default function DashboardPage() {
   const [selectedCountry, setSelectedCountry] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('')
   
+  // Show discounts section
+  const [showDiscounts, setShowDiscounts] = useState(false)
+  
   // Product selector state
   const [selectedProduct, setSelectedProduct] = useState('')
   const [productHistory, setProductHistory] = useState(null)
@@ -270,14 +273,17 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        <Card className="overflow-hidden relative">
+        <Card 
+          className="overflow-hidden relative cursor-pointer hover:shadow-lg transition-shadow"
+          onClick={() => setShowDiscounts(!showDiscounts)}
+        >
           <div className="absolute inset-0 bg-gradient-to-br from-amber-500/5 to-transparent"></div>
           <CardContent className="pt-6 relative">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500 mb-1">Active Discounts</p>
                 <p className="text-3xl font-bold text-amber-600">{stats.productsWithDiscount || 0}</p>
-                <p className="text-xs text-gray-400 mt-1">competitor offers</p>
+                <p className="text-xs text-gray-400 mt-1">unique products • click to view</p>
               </div>
               <div className="w-14 h-14 bg-gradient-to-br from-amber-500 to-amber-600 rounded-2xl flex items-center justify-center shadow-lg shadow-amber-500/30">
                 <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -288,6 +294,50 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Discounted Products Section (shows when clicked) */}
+      {showDiscounts && data?.discountedProducts?.length > 0 && (
+        <Card className="border-amber-200">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle className="flex items-center gap-2 text-amber-700">
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+              </svg>
+              Products on Discount ({data.discountedProducts.length})
+            </CardTitle>
+            <button
+              onClick={() => setShowDiscounts(false)}
+              className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+            >
+              <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+              {data.discountedProducts.map((product, idx) => (
+                <a
+                  key={idx}
+                  href={product.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="p-4 rounded-xl bg-amber-50 hover:bg-amber-100 transition-colors border border-amber-200"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    {product.country && <span className="text-lg">{countryFlags[product.country] || '🏳️'}</span>}
+                    <span className="px-2 py-0.5 bg-amber-500 text-white rounded text-xs font-bold">SALE</span>
+                  </div>
+                  <p className="font-medium text-gray-900 truncate mb-1">{product.name}</p>
+                  <p className="text-sm text-gray-500 truncate mb-2">{product.category}</p>
+                  <p className="text-xl font-bold text-amber-600">{product.price?.toFixed(2)} {product.currency}</p>
+                  <p className="text-xs text-gray-400 mt-1 truncate">{product.domain}</p>
+                </a>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* This Week's Price Changes */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">

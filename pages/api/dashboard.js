@@ -66,11 +66,17 @@ export default async function handler(req, res) {
     const priceDrops = priceChanges.filter(item => parseFloat(item['price diff last crawl']) < 0)
     const priceIncreases = priceChanges.filter(item => parseFloat(item['price diff last crawl']) > 0)
 
-    // Get products with discounts
-    const discountedProducts = filteredCompetitors
+    // Get products with discounts (unique by URL)
+    const discountedMap = new Map()
+    filteredCompetitors
       .filter(p => p.has_discount)
       .sort((a, b) => new Date(b.imported_at) - new Date(a.imported_at))
-      .slice(0, 20)
+      .forEach(p => {
+        if (!discountedMap.has(p.url)) {
+          discountedMap.set(p.url, p)
+        }
+      })
+    const discountedProducts = [...discountedMap.values()].slice(0, 50)
 
     // Get categories (normalized to handle case differences)
     const categoryMap = new Map()
@@ -93,7 +99,7 @@ export default async function handler(req, res) {
     const prices = filteredCompetitors.map(p => p.price).filter(p => p != null)
     const priceStats = {
       avgPrice: prices.length > 0 ? (prices.reduce((a, b) => a + b, 0) / prices.length) : 0,
-      totalWithDiscount: filteredCompetitors.filter(p => p.has_discount).length
+      totalWithDiscount: discountedProducts.length // Use unique count
     }
 
     // Weekly stats
