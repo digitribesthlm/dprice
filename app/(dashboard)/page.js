@@ -461,16 +461,32 @@ export default function DashboardPage() {
         </CardHeader>
         <CardContent>
           <div className="mb-6">
-            <label className="block text-sm font-medium text-gray-700 mb-2">Select a product to view price history</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Select a product to view price history 
+              {data?.products?.length > 0 && (
+                <span className="text-gray-400 font-normal ml-2">({data.products.length} products)</span>
+              )}
+            </label>
             <select
               value={selectedProduct}
               onChange={(e) => setSelectedProduct(e.target.value)}
-              className="w-full md:w-96 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors bg-white text-sm"
+              className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500 transition-colors bg-white text-sm"
             >
               <option value="">-- Select a product --</option>
-              {data?.productNames?.map((name, idx) => (
-                <option key={idx} value={name}>{name}</option>
-              ))}
+              {data?.products?.map((product, idx) => {
+                // Extract domain from URL
+                let domain = ''
+                try {
+                  domain = new URL(product.url).hostname.replace('www.', '')
+                } catch {
+                  domain = product.domain || ''
+                }
+                return (
+                  <option key={idx} value={product.name}>
+                    {product.name} — {domain} — {product.price?.toFixed(2)} {product.currency}
+                  </option>
+                )
+              })}
             </select>
           </div>
 

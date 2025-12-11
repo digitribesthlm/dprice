@@ -92,7 +92,24 @@ export default async function handler(req, res) {
     })
     const categories = [...categoryMap.values()].sort()
 
-    // Get unique product names for selector
+    // Get unique products for selector (deduplicated by URL, with full info)
+    const productMap = new Map()
+    filteredCompetitors.forEach(p => {
+      if (p.name && p.name.trim() && p.url && !productMap.has(p.url)) {
+        productMap.set(p.url, {
+          name: p.name,
+          url: p.url,
+          domain: p.domain,
+          price: p.price,
+          currency: p.currency,
+          category: p.category,
+          country: p.derivedCountry
+        })
+      }
+    })
+    const products = [...productMap.values()]
+    
+    // Also keep simple name list for backward compatibility
     const productNames = [...new Set(filteredCompetitors.map(p => p.name).filter(n => n && n.trim() !== ''))]
 
     // Calculate stats
@@ -164,6 +181,7 @@ export default async function handler(req, res) {
       countries: allCountries.filter(c => c).sort(),
       countryStats,
       productNames: productNames.slice(0, 200),
+      products: products.slice(0, 200), // Full product info for selector
       sources: uniqueDomains
     })
   } catch (error) {
