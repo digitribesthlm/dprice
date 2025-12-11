@@ -138,10 +138,18 @@ export default async function handler(req, res) {
       const c = p.derivedCountry
       if (c) {
         if (!countryGroups[c]) {
-          countryGroups[c] = { products: [], prices: [], discountUrls: new Set() }
+          countryGroups[c] = { 
+            productUrls: new Set(), // Unique products by URL
+            prices: new Map(), // Latest price per URL
+            discountUrls: new Set() 
+          }
         }
-        countryGroups[c].products.push(p)
-        if (p.price) countryGroups[c].prices.push(p.price)
+        // Track unique products by URL
+        if (p.url) {
+          countryGroups[c].productUrls.add(p.url)
+          // Keep the latest price for each URL
+          countryGroups[c].prices.set(p.url, p.price)
+        }
         // Track unique discounts by URL
         if (p.has_discount && p.url) {
           countryGroups[c].discountUrls.add(p.url)
@@ -149,14 +157,17 @@ export default async function handler(req, res) {
       }
     })
 
-    const countryStats = Object.keys(countryGroups).map(c => ({
-      _id: c,
-      productCount: countryGroups[c].products.length,
-      avgPrice: countryGroups[c].prices.length > 0 
-        ? countryGroups[c].prices.reduce((a, b) => a + b, 0) / countryGroups[c].prices.length
-        : 0,
-      discountCount: countryGroups[c].discountUrls.size // Unique discounts
-    })).sort((a, b) => b.productCount - a.productCount)
+    const countryStats = Object.keys(countryGroups).map(c => {
+      const prices = [...countryGroups[c].prices.values()].filter(p => p != null && p > 0)
+      return {
+        _id: c,
+        productCount: countryGroups[c].productUrls.size, // Unique products
+        avgPrice: prices.length > 0 
+          ? prices.reduce((a, b) => a + b, 0) / prices.length
+          : 0,
+        discountCount: countryGroups[c].discountUrls.size // Unique discounts
+      }
+    }).sort((a, b) => b.productCount - a.productCount)
 
     // Combine countries from own products and derived from competitor URLs
     const allCountries = [...new Set([...validCountries, ...Object.keys(countryGroups)])]
