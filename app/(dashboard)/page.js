@@ -317,11 +317,9 @@ export default function DashboardPage() {
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
               {data.discountedProducts.map((product, idx) => (
-                <a
+                <Link
                   key={idx}
-                  href={product.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`/prices/${product._id}`}
                   className="p-4 rounded-xl bg-amber-50 hover:bg-amber-100 transition-colors border border-amber-200"
                 >
                   <div className="flex items-center gap-2 mb-2">
@@ -332,7 +330,7 @@ export default function DashboardPage() {
                   <p className="text-sm text-gray-500 truncate mb-2">{product.category}</p>
                   <p className="text-xl font-bold text-amber-600">{product.price?.toFixed(2)} {product.currency}</p>
                   <p className="text-xs text-gray-400 mt-1 truncate">{product.domain}</p>
-                </a>
+                </Link>
               ))}
             </div>
           </CardContent>
