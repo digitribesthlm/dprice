@@ -1,4 +1,5 @@
 import { getDatabase, COLLECTIONS } from '../../lib/mongodb'
+import { getCountryFromUrl } from '../../lib/countryMapping'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -18,6 +19,11 @@ export default async function handler(req, res) {
 
     const searchTerm = productCode || search
 
+    // Find OWN products matching the search term (in URL) - these have country data
+    const ownResults = await ownProducts.find({
+      url: { $regex: searchTerm, $options: 'i' }
+    }).sort({ country: 1, imported_at: -1 }).toArray()
+
     // Find competitor products matching the search term (in URL or name)
     const competitorResults = await competitorPrices.find({
       $and: [
@@ -30,46 +36,73 @@ export default async function handler(req, res) {
           ]
         }
       ]
-    }).sort({ country: 1, imported_at: -1 }).toArray()
+    }).sort({ imported_at: -1 }).toArray()
 
-    // Find own products matching the search term
-    const ownResults = await ownProducts.find({
-      url: { $regex: searchTerm, $options: 'i' }
-    }).sort({ country: 1, imported_at: -1 }).toArray()
+    // Add derived country to competitor results based on URL
+    const competitorWithCountry = competitorResults.map(p => ({
+      ...p,
+      country: p.country || getCountryFromUrl(p.url) || getCountryFromUrl(p.domain),
+      source: 'competitor'
+    }))
 
-    // Group competitor results by country
-    const byCountry = {}
-    competitorResults.forEach(product => {
-      const country = product.country || 'Unknown'
-      if (!byCountry[country]) {
-        byCountry[country] = []
+    // Group OWN products by country
+    const ownByCountry = {}
+    ownResults.forEach(product => {
+      const country = product.country
+      if (country) {
+        if (!ownByCountry[country]) {
+          ownByCountry[country] = []
+        }
+        ownByCountry[country].push({
+          ...product,
+          price: product.correct_price || product.ord_price,
+          name: product.url.split('/').pop() || product.url,
+          source: 'own'
+        })
       }
-      byCountry[country].push(product)
     })
 
-    // Get latest price per country (deduplicate by URL)
-    const latestByCountry = {}
-    Object.keys(byCountry).forEach(country => {
+    // Group competitor products by derived country
+    const competitorByCountry = {}
+    competitorWithCountry.forEach(product => {
+      const country = product.country
+      if (country) {
+        if (!competitorByCountry[country]) {
+          competitorByCountry[country] = []
+        }
+        competitorByCountry[country].push(product)
+      }
+    })
+
+    // Combine all countries
+    const allCountries = new Set([...Object.keys(ownByCountry), ...Object.keys(competitorByCountry)])
+    
+    // Calculate stats per country
+    const countryPrices = Array.from(allCountries).map(country => {
+      const ownProds = ownByCountry[country] || []
+      const compProds = competitorByCountry[country] || []
+      const allProds = [...ownProds, ...compProds]
+      
+      // Deduplicate by URL
       const seen = new Set()
-      latestByCountry[country] = byCountry[country].filter(p => {
+      const uniqueProds = allProds.filter(p => {
         if (seen.has(p.url)) return false
         seen.add(p.url)
         return true
       })
-    })
 
-    // Calculate price comparison stats
-    const countryPrices = Object.keys(latestByCountry).map(country => {
-      const products = latestByCountry[country]
-      const prices = products.map(p => p.price).filter(p => p != null)
+      const prices = uniqueProds.map(p => p.price).filter(p => p != null && p > 0)
+      
       return {
         country,
-        productCount: products.length,
+        productCount: uniqueProds.length,
+        ownProductCount: ownProds.length,
+        competitorCount: compProds.length,
         avgPrice: prices.length > 0 ? (prices.reduce((a, b) => a + b, 0) / prices.length) : 0,
         minPrice: prices.length > 0 ? Math.min(...prices) : 0,
         maxPrice: prices.length > 0 ? Math.max(...prices) : 0,
-        currency: products[0]?.currency || 'SEK',
-        products: products.slice(0, 10) // Limit to 10 per country
+        currency: uniqueProds[0]?.currency || 'SEK',
+        products: uniqueProds.slice(0, 10)
       }
     })
 
@@ -87,15 +120,18 @@ export default async function handler(req, res) {
 
     return res.status(200).json({
       searchTerm,
-      totalResults: competitorResults.length,
+      totalResults: ownResults.length + competitorResults.length,
       countryComparison: countryPrices,
       ownProducts: ownResults,
+      competitorProducts: competitorWithCountry,
       dumpingAlerts,
       stats: {
-        countriesFound: Object.keys(latestByCountry).length,
+        countriesFound: countryPrices.length,
         overallAvgPrice: overallAvg.toFixed(2),
         lowestCountry: countryPrices[0]?.country || 'N/A',
-        lowestPrice: countryPrices[0]?.avgPrice?.toFixed(2) || 'N/A'
+        lowestPrice: countryPrices[0]?.avgPrice?.toFixed(2) || 'N/A',
+        ownProductsFound: ownResults.length,
+        competitorProductsFound: competitorResults.length
       }
     })
   } catch (error) {
@@ -103,4 +139,3 @@ export default async function handler(req, res) {
     return res.status(500).json({ message: 'Internal server error', error: error.message })
   }
 }
-

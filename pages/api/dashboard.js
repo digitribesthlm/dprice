@@ -1,4 +1,5 @@
 import { getDatabase, COLLECTIONS } from '../../lib/mongodb'
+import { getCountryFromUrl } from '../../lib/countryMapping'
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') {
@@ -13,14 +14,9 @@ export default async function handler(req, res) {
     const { country, category } = req.query
 
     // Filter for valid products only
-    const validProductFilter = {
+    let validProductFilter = {
       name: { $exists: true, $ne: null, $ne: '' },
       price: { $exists: true, $ne: null, $gt: 0 }
-    }
-
-    // Add country filter if provided
-    if (country) {
-      validProductFilter.country = country
     }
 
     // Add category filter if provided
@@ -32,30 +28,33 @@ export default async function handler(req, res) {
     const oneWeekAgo = new Date()
     oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
 
-    // Get total counts (only valid products)
-    const [totalCompetitorRecords, totalOwnProducts] = await Promise.all([
-      competitorPrices.countDocuments(validProductFilter),
-      ownProducts.countDocuments(country ? { country } : {})
-    ])
+    // Get unique countries from OWN PRODUCTS collection
+    const ownCountries = await ownProducts.distinct('country')
+    const validCountries = ownCountries.filter(c => c && c.trim() !== '')
 
-    // Get unique countries
-    const countries = await competitorPrices.distinct('country', {
-      name: { $exists: true, $ne: null, $ne: '' },
-      price: { $exists: true, $ne: null, $gt: 0 }
-    })
-    const validCountries = countries.filter(c => c && c.trim() !== '')
+    // Get ALL competitor prices to analyze by country (derived from URL)
+    const allCompetitorPrices = await competitorPrices.find(validProductFilter).toArray()
 
-    // Get unique domains (sources) from valid products
-    const uniqueDomains = await competitorPrices.distinct('domain', validProductFilter)
+    // Derive country from URL for each competitor price
+    const competitorWithCountry = allCompetitorPrices.map(p => ({
+      ...p,
+      derivedCountry: p.country || getCountryFromUrl(p.url) || getCountryFromUrl(p.domain)
+    }))
 
-    // Get this week's price changes (products with price diff) - only valid products
-    const weeklyChanges = await competitorPrices.find({
-      ...validProductFilter,
-      $or: [
-        { imported_at: { $gte: oneWeekAgo } },
-        { date: { $gte: oneWeekAgo } }
-      ]
-    }).sort({ imported_at: -1 }).limit(100).toArray()
+    // Filter by country if provided
+    let filteredCompetitors = competitorWithCountry
+    if (country) {
+      filteredCompetitors = competitorWithCountry.filter(p => p.derivedCountry === country)
+    }
+
+    // Get unique domains (sources)
+    const uniqueDomains = [...new Set(filteredCompetitors.map(p => p.domain).filter(d => d))]
+
+    // Get this week's price changes
+    const weeklyChanges = filteredCompetitors.filter(item => {
+      const itemDate = new Date(item.imported_at || item.date)
+      return itemDate >= oneWeekAgo
+    }).slice(0, 100)
 
     // Filter to only those with actual price changes
     const priceChanges = weeklyChanges.filter(item => {
@@ -67,41 +66,24 @@ export default async function handler(req, res) {
     const priceDrops = priceChanges.filter(item => parseFloat(item['price diff last crawl']) < 0)
     const priceIncreases = priceChanges.filter(item => parseFloat(item['price diff last crawl']) > 0)
 
-    // Get products with discounts (potential alerts) - only valid products
-    const discountedProducts = await competitorPrices.find({
-      ...validProductFilter,
-      has_discount: true
-    }).sort({ imported_at: -1 }).limit(20).toArray()
+    // Get products with discounts
+    const discountedProducts = filteredCompetitors
+      .filter(p => p.has_discount)
+      .sort((a, b) => new Date(b.imported_at) - new Date(a.imported_at))
+      .slice(0, 20)
 
-    // Get categories (only from valid products, optionally filtered by country)
-    const categoryFilter = {
-      name: { $exists: true, $ne: null, $ne: '' },
-      price: { $exists: true, $ne: null, $gt: 0 }
+    // Get categories
+    const categories = [...new Set(filteredCompetitors.map(p => p.category).filter(c => c && c.trim() !== ''))]
+
+    // Get unique product names for selector
+    const productNames = [...new Set(filteredCompetitors.map(p => p.name).filter(n => n && n.trim() !== ''))]
+
+    // Calculate stats
+    const prices = filteredCompetitors.map(p => p.price).filter(p => p != null)
+    const priceStats = {
+      avgPrice: prices.length > 0 ? (prices.reduce((a, b) => a + b, 0) / prices.length) : 0,
+      totalWithDiscount: filteredCompetitors.filter(p => p.has_discount).length
     }
-    if (country) categoryFilter.country = country
-    
-    const categories = await competitorPrices.distinct('category', categoryFilter)
-    const validCategories = categories.filter(cat => cat && cat.trim() !== '')
-
-    // Get unique product names for selector (only valid products)
-    const productNames = await competitorPrices.distinct('name', validProductFilter)
-    const validProductNames = productNames.filter(name => name && name.trim() !== '')
-
-    // Calculate stats (only from valid products)
-    const priceStats = await competitorPrices.aggregate([
-      { $match: validProductFilter },
-      {
-        $group: {
-          _id: null,
-          avgPrice: { $avg: '$price' },
-          minPrice: { $min: '$price' },
-          maxPrice: { $max: '$price' },
-          totalWithDiscount: { 
-            $sum: { $cond: ['$has_discount', 1, 0] } 
-          }
-        }
-      }
-    ]).toArray()
 
     // Weekly stats
     const weeklyStats = {
@@ -116,44 +98,53 @@ export default async function handler(req, res) {
         : 0
     }
 
-    // Get country stats for overview
-    const countryStats = await competitorPrices.aggregate([
-      { 
-        $match: {
-          name: { $exists: true, $ne: null, $ne: '' },
-          price: { $exists: true, $ne: null, $gt: 0 },
-          country: { $exists: true, $ne: null, $ne: '' }
+    // Get country stats from competitor prices (derived from URLs)
+    const countryGroups = {}
+    competitorWithCountry.forEach(p => {
+      const c = p.derivedCountry
+      if (c) {
+        if (!countryGroups[c]) {
+          countryGroups[c] = { products: [], prices: [], discounts: 0 }
         }
-      },
-      {
-        $group: {
-          _id: '$country',
-          productCount: { $sum: 1 },
-          avgPrice: { $avg: '$price' },
-          discountCount: { $sum: { $cond: ['$has_discount', 1, 0] } }
-        }
-      },
-      { $sort: { productCount: -1 } }
-    ]).toArray()
+        countryGroups[c].products.push(p)
+        if (p.price) countryGroups[c].prices.push(p.price)
+        if (p.has_discount) countryGroups[c].discounts++
+      }
+    })
+
+    const countryStats = Object.keys(countryGroups).map(c => ({
+      _id: c,
+      productCount: countryGroups[c].products.length,
+      avgPrice: countryGroups[c].prices.length > 0 
+        ? countryGroups[c].prices.reduce((a, b) => a + b, 0) / countryGroups[c].prices.length
+        : 0,
+      discountCount: countryGroups[c].discounts
+    })).sort((a, b) => b.productCount - a.productCount)
+
+    // Combine countries from own products and derived from competitor URLs
+    const allCountries = [...new Set([...validCountries, ...Object.keys(countryGroups)])]
+
+    // Own products count
+    const totalOwnProducts = await ownProducts.countDocuments(country ? { country } : {})
 
     return res.status(200).json({
       stats: {
-        totalCompetitorRecords,
+        totalCompetitorRecords: filteredCompetitors.length,
         totalOwnProducts,
-        totalSources: uniqueDomains.filter(d => d).length,
-        totalCategories: validCategories.length,
-        productsWithDiscount: priceStats[0]?.totalWithDiscount || 0,
-        avgPrice: priceStats[0]?.avgPrice?.toFixed(2) || '0',
+        totalSources: uniqueDomains.length,
+        totalCategories: categories.length,
+        productsWithDiscount: priceStats.totalWithDiscount,
+        avgPrice: priceStats.avgPrice?.toFixed(2) || '0',
       },
       weeklyStats,
-      priceDrops,
-      priceIncreases,
-      discountedProducts,
-      categories: validCategories,
-      countries: validCountries,
+      priceDrops: priceDrops.map(p => ({ ...p, country: p.derivedCountry })),
+      priceIncreases: priceIncreases.map(p => ({ ...p, country: p.derivedCountry })),
+      discountedProducts: discountedProducts.map(p => ({ ...p, country: p.derivedCountry })),
+      categories,
+      countries: allCountries.filter(c => c).sort(),
       countryStats,
-      productNames: validProductNames.slice(0, 200),
-      sources: uniqueDomains.filter(d => d)
+      productNames: productNames.slice(0, 200),
+      sources: uniqueDomains
     })
   } catch (error) {
     console.error('Dashboard API error:', error)
